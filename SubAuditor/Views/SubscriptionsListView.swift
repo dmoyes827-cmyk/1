@@ -62,7 +62,9 @@ private struct AddSubscriptionView: View {
     init(subscription: Subscription? = nil) {
         self.subscription = subscription
         _name = State(initialValue: subscription?.name ?? "")
-        _amount = State(initialValue: subscription.map { String($0.amount) } ?? "")
+        _amount = State(initialValue: subscription.map {
+            String($0.amount).replacingOccurrences(of: ".", with: Locale.current.decimalSeparator ?? ".")
+        } ?? "")
         _cycle = State(initialValue: subscription?.cycle ?? .monthly)
         _renewalDate = State(initialValue: subscription?.renewalDate ?? .now)
         _category = State(initialValue: subscription?.category ?? .other)
@@ -86,7 +88,7 @@ private struct AddSubscriptionView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        guard let value = Double(amount), value.isFinite, value > 0 else { return }
+                        guard let value = amountValue, value.isFinite, value > 0 else { return }
                         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                         if let subscription {
                             subscription.name = trimmedName
@@ -100,9 +102,14 @@ private struct AddSubscriptionView: View {
                         }
                         dismiss()
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (Double(amount) ?? 0) <= 0 || !(Double(amount)?.isFinite ?? false))
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (amountValue ?? 0) <= 0 || !(amountValue?.isFinite ?? false))
                 }
             }
+
         }
+    }
+
+    private var amountValue: Double? {
+        Double(amount.replacingOccurrences(of: Locale.current.decimalSeparator ?? ".", with: "."))
     }
 }

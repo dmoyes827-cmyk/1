@@ -51,14 +51,14 @@ private struct CSVPreviewView: View {
     let rows: [[String]]
     @State private var mapping: CSVMapping
     @State private var error: String?
+    @State private var transactions: [CSVTransaction] = []
+    @State private var validationError: String?
+    @State private var isParsing = true
+    @State private var parsedMapping: CSVMapping?
 
     init(rows: [[String]]) {
         self.rows = rows
         _mapping = State(initialValue: CSVParser.suggestedMapping(headers: rows[0]))
-    }
-
-    private var transactions: [CSVTransaction] {
-        (try? CSVParser.transactions(rows: rows, mapping: mapping)) ?? []
     }
 
     var body: some View {
@@ -71,7 +71,9 @@ private struct CSVPreviewView: View {
                     Toggle("Expenses are negative amounts", isOn: $mapping.invertAmounts)
                 }
                 Section("Preview") {
-                    if let message = validationError {
+                    if isParsing || parsedMapping != mapping {
+                        ProgressView("Preparing preview")
+                    } else if let message = validationError {
                         Text(message).foregroundStyle(.red)
                     } else {
                         Text("Only positive expense amounts will be imported; zero amounts and credits are skipped.")
@@ -98,21 +100,31 @@ private struct CSVPreviewView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Import") { importTransactions() }
-                        .disabled(validationError != nil || !transactions.contains { $0.amount > 0 })
+                        .disabled(isParsing || parsedMapping != mapping || validationError != nil || !transactions.contains { $0.amount > 0 })
                 }
             }
             .alert("Import failed", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK") { error = nil }
             } message: { Text(error ?? "") }
-        }
-    }
-
-    private var validationError: String? {
-        do {
-            _ = try CSVParser.transactions(rows: rows, mapping: mapping)
-            return nil
-        } catch {
-            return error.localizedDescription
+            .task(id: mapping) {
+                isParsing = true
+                let selectedMapping = mapping
+                let inputRows = rows
+                let result = await Task.detached(priority: .userInitiated) {
+                    Result { try CSVParser.transactions(rows: inputRows, mapping: selectedMapping) }
+                }.value
+                guard !Task.isCancelled else { return }
+                switch result {
+                case .success(let parsed):
+                    transactions = parsed
+                    validationError = nil
+                case .failure(let error):
+                    transactions = []
+                    validationError = error.localizedDescription
+                }
+                parsedMapping = selectedMapping
+                isParsing = false
+            }
         }
     }
 
@@ -126,7 +138,7 @@ private struct CSVPreviewView: View {
 
     private func importTransactions() {
         do {
-            for transaction in try CSVParser.transactions(rows: rows, mapping: mapping) where transaction.amount > 0 {
+            for transaction in transactions where transaction.amount > 0 {
                 context.insert(Expense(name: transaction.name, amount: transaction.amount, date: transaction.date,
                                        category: CategorizationRules.category(for: transaction.name)))
             }

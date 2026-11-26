@@ -14,7 +14,7 @@ enum CSVError: LocalizedError {
     }
 }
 
-struct CSVMapping {
+struct CSVMapping: Equatable {
     var date: Int
     var description: Int
     var amount: Int
@@ -115,14 +115,28 @@ enum CSVParser {
     }
 
     private static func parseDate(_ text: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.isLenient = false
-        for format in ["yyyy-MM-dd", "MM/dd/yyyy", "M/d/yyyy", "MM/dd/yy"] {
-            formatter.dateFormat = format
-            if let date = formatter.date(from: text.trimmingCharacters(in: .whitespacesAndNewlines)) { return date }
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let iso = value.contains("-")
+        let parts = value.split(separator: iso ? "-" : "/", omittingEmptySubsequences: false)
+        guard parts.count == 3,
+              parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy { $0 >= "0" && $0 <= "9" } }),
+              let first = Int(parts[0]), let second = Int(parts[1]), let third = Int(parts[2]) else { return nil }
+        let year: Int
+        let month: Int
+        let day: Int
+        if iso {
+            guard parts[0].count == 4, parts[1].count == 2, parts[2].count == 2 else { return nil }
+            (year, month, day) = (first, second, third)
+        } else {
+            guard (1...2).contains(parts[0].count), (1...2).contains(parts[1].count),
+                  parts[2].count == 2 || parts[2].count == 4 else { return nil }
+            (year, month, day) = (parts[2].count == 2 ? 2000 + third : third, first, second)
         }
-        return nil
+        guard year > 0 else { return nil }
+        let calendar = Calendar(identifier: .gregorian)
+        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else { return nil }
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return components.year == year && components.month == month && components.day == day ? date : nil
     }
 
     private static func parseAmount(_ text: String) -> Double? {

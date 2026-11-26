@@ -15,7 +15,8 @@ bills.
 The import screen accepts UTF-8 CSV files with a header row. Map date,
 description, and amount columns and review the preview before importing.
 Supported dates are `yyyy-MM-dd`, `MM/dd/yyyy`, and `MM/dd/yy`. Amounts may
-include dollar signs, commas, or parentheses. By default positive amounts are
+include dollar signs, commas, or parentheses. Two-digit years are interpreted
+as 2000–2099. By default positive amounts are
 expenses; enable the negative-amount toggle for banks that export debits as
 negative numbers. Zero amounts and credits are skipped. Imports are not
 deduplicated automatically; the dashboard flags possible duplicates for review.
